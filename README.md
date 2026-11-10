@@ -1,120 +1,108 @@
-# Optimizing IDS Rule Placement via Set Covering with Capacity Constraints: A Multi-Sensor Attack Graph Approach
+# Optimizing IDS Rule Placement via Set Covering with Capacity Constraints
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![IIITDM Kancheepuram](https://img.shields.io/badge/Course-CS6103%20CNS-red.svg)](http://www.iiitdm.ac.in)
+**Course Project — CS6103: Computer and Network Security**  
+**Department of Computer Science and Engineering, IIITDM Kancheepuram**
 
-This repository contains the simulation testbed, optimization engine, and benchmark evaluation for the **CS6103 Computer and Network Security** course project at **IIITDM Kancheepuram**.
-
-### 👥 Authors
-* **Raghul Vishwa** (`CS23I1025`)
-* **Amit Sharma** (`CS23B1093`)
-
-*Department of Computer Science and Engineering, Indian Institute of Information Technology, Design and Manufacturing (IIITDM), Kancheepuram, India.*
+### Team Members
+- **Raghul Vishwa** (`CS23I1025`)
+- **Amit Sharma** (`CS23B1093`)
 
 ---
 
-## 📌 Problem Overview & Motivation
+## About The Project
 
-Conventional enterprise intrusion detection architectures deploy every signature rule across all network sensors under the assumption that redundancy maximizes threat detection. However, this strategy introduces the **Rule Overload Paradox**:
+In enterprise networks, security engineers often enable every available signature rule across all deployed Intrusion Detection Systems (IDS like Snort or Suricata). The assumption is that more rules everywhere = better security. 
 
-1. Signature inspection in tools like Snort consumes CPU cycles proportional to the active rule count.
-2. During traffic spikes or DDoS surges, sensor CPU processing capacity saturates, filling kernel socket buffers (`AF_PACKET` ring buffer).
-3. Packets are dropped silently without inspection, enabling malicious exploits to bypass defenses completely.
+However, in practice, this causes what we call the **Rule Overload Paradox**:
+- Pattern matching against hundreds or thousands of PCRE/string rules consumes heavy CPU cycles.
+- When high-volume traffic bursts or DDoS surges hit, the sensor's packet processing capacity gets maxed out.
+- The OS kernel buffer (`AF_PACKET` socket ring buffer) overflows and starts silently dropping packets without inspecting them.
+- Attackers exploit this exact window: by flooding the network with background traffic, their exploit payload slips right through the dropped packets undetected.
 
-We model signature placement as a **Capacity-Constrained Set Covering Problem (CC-SCP)** with statistical headroom constraints ($\mu_i + \lambda \sigma_i \le C_i$). By pruning unnecessary rule redundancies, our solver guarantees 100% exploit coverage across all multi-hop lateral attack paths while eliminating buffer overflow drops (0.0% packet drop rate).
+In this project, we modeled rule deployment as a **Capacity-Constrained Set Covering Problem (CC-SCP)**. Instead of blindly putting every rule on every sensor, we analyze the multi-hop attack graph and distribute complementary subsets of rules across sensors so that:
+1. **100% of attack paths remain covered** (every exploit sequence is intercepted somewhere along its path).
+2. **Each sensor stays within its traffic headroom** (`mean_rate + lambda * std_dev <= Capacity`), completely eliminating packet drop blind spots.
 
----
-
-## 🔬 Mathematical Formulation
-
-### 1. Attack Graph Coverage
-Let $G = (V, E)$ be the enterprise attack graph where $V$ represents system vulnerabilities and $E$ represents exploit transitions across lateral hosts. An assignment $\rho: D \to 2^R$ is valid if and only if:
-$$\bigcup_{d_i \in D} \bigcup_{r_j \in \rho(d_i)} \sigma(d_i, r_j) = V$$
-
-### 2. Statistical Headroom Capacity Constraint
-To prevent queue saturation during traffic surges without expensive hardware upgrades, each sensor $d_i$ must satisfy:
-$$\sum_{r_j \in \rho(d_i)} (\mu_i + \lambda \sigma_i) \le C_i, \quad \forall d_i \in D$$
-where $\mu_i$ is empirical mean traffic rate, $\sigma_i$ is traffic standard deviation, and $\lambda$ is the safety headroom multiplier (e.g. $\lambda = 2.5$).
-
-### 3. Algorithm 1: Max-Heap Priority-Queue Backtracking
-Candidate sensor-rule pairs $(d_i, r_j)$ are evaluated at each step using composite key:
-$$\kappa(d_i, r_j) = \Big( |\sigma(d_i, r_j) \cap V_{\text{uncov}}|, \; C_i - (|\rho(d_i)| + 1)(\mu_i + \lambda\sigma_i) \Big)$$
-Assignments offering the highest incremental vulnerability coverage are prioritized; branch-and-bound pruning discards capacity-infeasible branches early.
+This work reproduces, tests, and extends the formulation introduced by **Ghosh et al. (Computers & Security, Elsevier 2025/2026)**.
 
 ---
 
-## 📁 Repository Structure
+## What's in this Repository
 
 ```text
-ids-rule-placement-cns/
-├── docs/
-│   └── IDS_Rule_Placement_Final_Paper.pdf  # Final compiled 7-page IEEE research paper
-├── paper/
-│   ├── main.tex                           # Full LaTeX conference source
-│   ├── references.bib                     # IEEE bibliography with 12 citations
-│   ├── IEEEtran.cls                       # IEEE Transactions class file
-│   └── images/                            # High-resolution benchmark figures
 ├── src/
-│   ├── attack_graph.py                    # Multi-hop attack graph and topology models
-│   ├── solver.py                          # CC-SCP Max-Heap Backtracking solver & baselines
-│   ├── simulator.py                       # Packet drop and queue overflow simulator
-│   └── evaluate.py                        # Benchmark evaluation pipeline (Table I & II)
+│   ├── attack_graph.py    # Enterprise topology (4 sensors, 4 hosts, CVE exploit mapping)
+│   ├── solver.py          # Algorithm 1: Max-Heap Priority Backtracking search + baselines
+│   ├── simulator.py       # Traffic burst & socket queue overflow simulator (CSE-CIC-IDS2017)
+│   └── evaluate.py        # Benchmark pipeline reproducing Table I & Table II results
 ├── tests/
-│   └── test_solver.py                     # Unittest verification suite
-├── requirements.txt                       # Python dependencies
+│   └── test_solver.py     # Unit tests verifying coverage invariants and capacity constraints
+├── paper/
+│   ├── main.tex           # Full LaTeX paper source (IEEE conference format)
+│   ├── references.bib     # Citations (12 papers including original Ghosh et al. DOI)
+│   ├── IEEEtran.cls       # IEEE format class file
+│   └── images/            # High-res figures (system architecture, attack paths, drop plots)
+├── docs/
+│   └── IDS_Rule_Placement_Final_Paper.pdf  # Final compiled 7-page report
+├── requirements.txt       # Python dependencies
 └── README.md
 ```
 
 ---
 
-## 🚀 Quickstart & Reproduction
+## How It Works (Algorithm 1)
 
-### 1. Installation
-Clone the repository and install dependencies:
+Our solver uses a **Priority-Queue Backtracking Search with a Max-Heap**:
+- At each step, it checks which vulnerability is still uncovered on the attack paths.
+- It computes a priority key for each candidate `(sensor, rule)` pair:
+  $$\text{Key} = (\text{New Vulnerabilities Covered}, \text{Remaining Sensor Headroom})$$
+- It prioritizes pairs that cover the most uncovered exploits while leaving the largest safety headroom on the sensor.
+- Any branch that would exceed the physical capacity headroom (`load > C_i`) is pruned immediately, which avoids exponential search time and runs in $\mathcal{O}(|D||R|\log(|D||R|))$.
+
+---
+
+## How to Run
+
+### 1. Setup
+Make sure you have Python 3.8+ installed. Install the dependencies:
 ```bash
-git clone https://github.com/amitsharma2004/ids-rule-placement-cns.git
-cd ids-rule-placement-cns
 pip install -r requirements.txt
 ```
 
-### 2. Run Optimization & Evaluation Pipeline
-Reproduce the experimental results comparing Uniform vs CC-SCP placement under CSE-CIC-IDS2017 traffic profiles:
+### 2. Run the Evaluation Benchmark
+To solve the placement problem and simulate normal, brute-force, and DDoS traffic bursts:
 ```bash
 python3 src/evaluate.py
 ```
 
-### 3. Run Unit Tests
-Verify mathematical invariants and complete attack path coverage:
+This will print the full comparative tables:
+- Total rule instances across sensors (Uniform vs Greedy vs CC-SCP).
+- Packet drop rates across traffic scenarios.
+- Missed exploit packets per sensor.
+
+### 3. Run the Unit Tests
+To verify that coverage and capacity constraints hold strictly:
 ```bash
 python3 -m unittest discover -s tests
 ```
 
 ---
 
-## 📊 Experimental Results
+## Key Results Summary
 
-Evaluated on virtual enterprise testbed replaying CSE-CIC-IDS2017 benchmark traces:
+We simulated this across the CSE-CIC-IDS2017 traffic distributions on a 4-sensor enterprise testbed:
 
-| Metric | Uniform Baseline (Full Catalog) | Proposed CC-SCP (Max-Heap Backtracking) |
+| Metric | Uniform Deployment (Default) | Our CC-SCP Placement |
 |---|:---:|:---:|
-| **Total Rule Instances** | 32 rules | **4 rules** (87.5% reduction) |
+| **Total Rule Instances Deployed** | 32 rules | **4 rules** (87.5% reduction) |
 | **Normal Traffic Drop Rate** | 27.7% | **0.0%** |
-| **Brute-Force Drop Rate** | 30.6% | **0.0%** |
+| **Brute-Force Traffic Drop Rate** | 30.6% | **0.0%** |
 | **Volumetric DDoS Drop Rate** | Up to 59.5% | **0.4%** |
-| **Missed Malicious Packets** | 691 packets | **0 packets (100% caught)** |
-| **Search Complexity** | $\mathcal{O}(2^{|D||R|})$ exhaustive | $\mathcal{O}(|D||R|\log(|D||R|))$ |
+| **Missed Exploit Packets (Bypassed)** | 691 packets | **0 packets (100% intercepted)** |
 
 ---
 
-## 📖 Reference & Citation
+## Reference Paper
 
-This project reproduces, evaluates, and extends the foundational work introduced by:
-
-> Arka Ghosh, Domenico Ditale, Massimiliano Albanese, and Preetam Mukherjee, *"Optimizing the placement of intrusion detection rules in enterprise networks,"* **Computers & Security**, Elsevier, 2025/2026.  
-> DOI: [10.1016/j.cose.2025.104748](https://doi.org/10.1016/j.cose.2025.104748)
-
----
-
-## 📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
+- Arka Ghosh, Domenico Ditale, Massimiliano Albanese, and Preetam Mukherjee. *"Optimizing the placement of intrusion detection rules in enterprise networks."* **Computers & Security**, Elsevier, 2025/2026.  
+  DOI: [10.1016/j.cose.2025.104748](https://doi.org/10.1016/j.cose.2025.104748)
